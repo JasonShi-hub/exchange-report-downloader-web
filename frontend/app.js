@@ -343,38 +343,48 @@ async function streamJobEvents(jobId) {
   stopStreaming();
   const controller = new AbortController();
   state.streamAbortController = controller;
+  try {
+    const response = await authedFetch(`/api/jobs/${jobId}/events`, {
+      signal: controller.signal,
+    });
 
-  const response = await authedFetch(`/api/jobs/${jobId}/events`, {
-    signal: controller.signal,
-  });
-
-  if (!response.body) {
-    throw new Error("浏览器不支持流式响应");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) {
-      break;
+    if (!response.body) {
+      throw new Error("浏览器不支持流式响应");
     }
-    buffer += decoder.decode(value, { stream: true });
 
-    let boundary = buffer.indexOf("\n\n");
-    while (boundary !== -1) {
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const dataLines = rawEvent
-        .split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart());
-      if (dataLines.length) {
-        handleJobEvent(JSON.parse(dataLines.join("\n")));
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
       }
-      boundary = buffer.indexOf("\n\n");
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const rawEvent = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const dataLines = rawEvent
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart());
+        if (dataLines.length) {
+          handleJobEvent(JSON.parse(dataLines.join("\n")));
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      return;
+    }
+    throw error;
+  } finally {
+    if (state.streamAbortController === controller) {
+      state.streamAbortController = null;
     }
   }
 }
@@ -412,7 +422,6 @@ function handleJobEvent(event) {
     elements.startButton.disabled = false;
     elements.cancelButton.disabled = true;
     elements.logHint.textContent = event.job.status === "completed" ? "任务已完成" : "任务已结束";
-    stopStreaming();
     if (event.job.status === "completed") {
       elements.downloadButton.disabled = false;
       void finalizeCompletedJob(event.job);
@@ -607,4 +616,3 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
-
