@@ -1,0 +1,14 @@
+.DS_Store
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+dist/
+build/
+backend/.env
+backend/.mypy_cache/
+backend/.ruff_cache/
+

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>交易所报告下载器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="hero-grid"></div>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Public Utility / CNINFO + HKEX</p>
+        <h1>交易所报告下载器</h1>
+        <p class="hero-text">
+          面向浏览器访问的 A 股与港股公告下载工具。服务端负责抓取、整理并打包，
+          用户可直接下载 ZIP，或在支持的浏览器中写入本地文件夹。
+        </p>
+      </div>
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <span>交付方式</span>
+          <strong>ZIP / 本地文件夹</strong>
+        </div>
+        <div class="metric-card">
+          <span>任务策略</span>
+          <strong>单 worker FIFO 队列</strong>
+        </div>
+        <div class="metric-card">
+          <span>访问方式</span>
+          <strong>共享密码</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-layout">
+      <section class="panel auth-panel" id="authPanel">
+        <div class="panel-head">
+          <p class="panel-kicker">Step 1</p>
+          <h2>输入访问密码</h2>
+        </div>
+        <p class="panel-note">
+          通过共享密码换取 7 天有效的访问令牌。令牌仅保存在当前浏览器。
+        </p>
+        <label class="field">
+          <span>访问密码</span>
+          <input type="password" id="passwordInput" placeholder="请输入共享密码">
+        </label>
+        <div class="button-row">
+          <button class="button primary" id="loginButton">进入下载器</button>
+        </div>
+        <p class="inline-status" id="authStatus"></p>
+      </section>
+
+      <section class="app-shell hidden" id="appShell">
+        <div class="app-toolbar">
+          <div>
+            <p class="panel-kicker">Queue Aware</p>
+            <h2>下载任务控制台</h2>
+          </div>
+          <div class="toolbar-actions">
+            <span class="token-chip" id="sessionChip">已登录</span>
+            <button class="button ghost" id="logoutButton">退出</button>
+          </div>
+        </div>
+
+        <div class="panel-grid">
+          <section class="panel span-two">
+            <div class="panel-head">
+              <p class="panel-kicker">Step 2</p>
+              <h3>下载参数</h3>
+            </div>
+
+            <div class="market-switch" id="marketSwitch">
+              <button class="market-button active" data-market="ashare">A股</button>
+              <button class="market-button" data-market="hkex">港股</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="field wide">
+                <span id="stockLabel">股票代码（多个用空格或逗号分隔）</span>
+                <input type="text" id="stocksInput" placeholder="例如: 000001 600036">
+              </label>
+              <label class="field">
+                <span>起始日期</span>
+                <input type="date" id="startDateInput">
+              </label>
+              <label class="field">
+                <span>结束日期</span>
+                <input type="date" id="endDateInput">
+              </label>
+            </div>
+
+            <div class="delivery-card">
+              <div class="delivery-head">
+                <div>
+                  <p class="panel-kicker">Step 3</p>
+                  <h3>下载方式</h3>
+                </div>
+                <p class="delivery-note">公网版不再暴露本地路径输入框。</p>
+              </div>
+              <div class="delivery-options">
+                <label class="mode-option active" data-mode-card="zip">
+                  <input type="radio" name="deliveryMode" value="zip" checked>
+                  <span>下载 ZIP</span>
+                  <small>全浏览器可用，任务完成后直接下载压缩包。</small>
+                </label>
+                <label class="mode-option hidden" id="folderModeCard" data-mode-card="folder">
+                  <input type="radio" name="deliveryMode" value="folder">
+                  <span>保存到本地文件夹（实验）</span>
+                  <small>仅桌面 Chrome / Edge 且 HTTPS 下可用。</small>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <p class="panel-kicker">Guardrails</p>
+              <h3>限制与说明</h3>
+            </div>
+            <ul class="limit-list">
+              <li>单次最多 <strong id="limitStocks">5</strong> 个股票代码</li>
+              <li>日期跨度最多 <strong id="limitDays">365</strong> 天</li>
+              <li>服务端按单任务队列执行</li>
+              <li>结果文件保留 1 小时后自动删除</li>
+            </ul>
+            <p class="panel-note" id="marketNote">
+              A股不勾选类别时下载全部常规公告（不含调研）。
+            </p>
+          </section>
+
+          <section class="panel span-two">
+            <div class="panel-head">
+              <p class="panel-kicker">Step 4</p>
+              <h3>报告类别</h3>
+            </div>
+
+            <div class="toolbar-inline">
+              <div class="chip-actions" id="ashareActions">
+                <button class="text-action" data-action="all">全选</button>
+                <button class="text-action" data-action="none">全不选</button>
+                <button class="text-action" data-action="periodic">仅定期报告</button>
+              </div>
+              <div class="chip-actions hidden" id="hkexActions">
+                <button class="text-action" data-action="all">全选</button>
+                <button class="text-action" data-action="none">全不选</button>
+                <button class="text-action" data-action="results">仅业绩报告</button>
+              </div>
+            </div>
+
+            <div class="language-strip hidden" id="languageStrip">
+              <span>下载语言</span>
+              <label><input type="checkbox" id="langChinese" checked> 中文</label>
+              <label><input type="checkbox" id="langEnglish" checked> 英文</label>
+            </div>
+
+            <div class="category-grid" id="categoryGrid"></div>
+          </section>
+
+          <section class="panel span-two">
+            <div class="panel-head">
+              <p class="panel-kicker">Step 5</p>
+              <h3>任务执行</h3>
+            </div>
+
+            <div class="button-row">
+              <button class="button primary" id="startButton">开始下载</button>
+              <button class="button danger" id="cancelButton" disabled>取消任务</button>
+              <button class="button ghost" id="downloadButton" disabled>下载结果 ZIP</button>
+            </div>
+
+            <div class="job-status-card">
+              <div class="job-line">
+                <span>任务状态</span>
+                <strong id="jobStatus">空闲</strong>
+              </div>
+              <div class="job-line">
+                <span>队列位置</span>
+                <strong id="queuePosition">-</strong>
+              </div>
+              <div class="job-line">
+                <span>当前任务ID</span>
+                <strong id="jobIdLabel">-</strong>
+              </div>
+            </div>
+
+            <div class="progress-card">
+              <div class="progress-meta">
+                <span>下载进度</span>
+                <span id="progressLabel">0 / 0</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+            </div>
+
+            <div class="stat-row">
+              <div class="stat-card"><span>总计</span><strong id="statTotal">0</strong></div>
+              <div class="stat-card"><span>已下载</span><strong id="statDownloaded">0</strong></div>
+              <div class="stat-card"><span>跳过</span><strong id="statSkipped">0</strong></div>
+              <div class="stat-card"><span>失败</span><strong id="statFailed">0</strong></div>
+            </div>
+
+            <div class="log-panel">
+              <div class="log-head">
+                <span>实时日志</span>
+                <span id="logHint">等待任务</span>
+              </div>
+              <pre class="log-box" id="logBox"></pre>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
+
